@@ -57,7 +57,7 @@ def detect_face(img):
     
     #load OpenCV face detector, I am using LBP which is fast
     #there is also a more accurate but slow Haar classifier
-    face_cascade = cv2.CascadeClassifier('opencv-files/lbpcascade_frontalface.xml')
+    face_cascade = cv2.CascadeClassifier('/home/pi/magic_mirror/opencv-files/lbpcascade_frontalface.xml')
 
     #let's detect multiscale (some images may be closer to camera than others) images
     #result is a list of faces
@@ -76,22 +76,27 @@ def detect_face(img):
 
 def prepare_training_data(data_folder_path):
     
+    print("Looking for directories with photos")
     dirs = os.listdir(data_folder_path)
     
     faces = []
     labels = []
 
+    print("Going through each directory")
     for dir_name in dirs:
         
+        print("Looking in directory [" + dir_name + "]")
         if not dir_name.startswith("s"):
             continue;
             
         label = int(dir_name.replace("s", ""))
         
         subject_dir_path = data_folder_path + "/" + dir_name
+        print("Subject directory path [" + subject_dir_path + "]")
         
         subject_images_names = os.listdir(subject_dir_path)
         
+        print("Looking through images")
         for image_name in subject_images_names:
             
             if image_name.startswith("."):
@@ -99,10 +104,12 @@ def prepare_training_data(data_folder_path):
             
             image_path = subject_dir_path + "/" + image_name
 
+            print("Reading image at path [" + image_path + "]")
             image = cv2.imread(image_path)
+            cv2.resize(image, (400, 500))
             
-            cv2.imshow("Training on image...", cv2.resize(image, (400, 500)))
-            cv2.waitKey(100)
+            #cv2.imshow("Training on image...", cv2.resize(image, (400, 500)))
+            #cv2.waitKey(100)
             
             face, rect = detect_face(image)
             
@@ -120,7 +127,7 @@ def train_recognizer():
     global face_recognizer
     
     print("Preparing data...")
-    faces, labels = prepare_training_data("training-data")
+    faces, labels = prepare_training_data("/home/pi/magic_mirror/training-data")
     print("Data prepared")
 
     print("Total faces: ", len(faces))
@@ -149,8 +156,8 @@ def draw_text(img, text, x, y):
 def say(sentence):
     if sentence != "":
         tts = gTTS(text=sentence, lang='en')
-        tts.save("ip-text-to-sound.mp3")
-        os.system("mpg123 ip-text-to-sound.mp3")
+        tts.save("/tmp/ip-text-to-sound.mp3")
+        os.system("mpg123 /tmp/ip-text-to-sound.mp3")
 
 def predict(test_img):	
     has_found_face = False
@@ -168,7 +175,7 @@ def predict(test_img):
 
     #predict the image using our face recognizer 
     label, confidence = face_recognizer.predict(face)
-    logging.info("<" + subjects[label] + "> @ " + str(confidence))
+    logging.debug("<" + subjects[label] + "> @ " + str(confidence))
     
     #draw a rectangle around face detected
     draw_rectangle(img, rect)
@@ -275,7 +282,7 @@ def setup_conversation_stream():
         )
         
     audio_sink = WaveSink(
-        open("response.wav", 'wb'),
+        open("/tmp/response.wav", 'wb'),
         sample_rate=DEFAULT_AUDIO_SAMPLE_RATE,
         sample_width=DEFAULT_AUDIO_SAMPLE_WIDTH
         )
@@ -296,7 +303,6 @@ if __name__ == '__main__' and __package__ is None:
     
     # Setup logging.
     logging.basicConfig(level=logging.DEBUG)
-    logging.captureWarnings(True)
    
     say("Just looking up the faces i know about")
     train_recognizer()
@@ -322,15 +328,15 @@ if __name__ == '__main__' and __package__ is None:
         displayImage, person_seen, has_found_face, face_is_known = predict(frame)
 
         if has_found_face == False:
-            logging.info("No face:" + str(not_seen_count))
+            logging.debug("No face:" + str(not_seen_count))
             not_seen_count = not_seen_count + 1
             
         if has_found_face:
             person_seen_count = person_seen_count + 1
             not_seen_count = 0
-            logging.info("Face seen: " + str(person_seen_count))
+            logging.debug("Face seen: " + str(person_seen_count))
         
-        if person_seen_count == 50:
+        if person_seen_count == 50 and last_seen == "":
             start_conversation_with_magic_mirror(grpc_channel, "")
             talk_to_magic_mirror(grpc_channel)
             last_seen = person_seen
